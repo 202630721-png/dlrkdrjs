@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>수업 안 듣는 학생 잡도리하기!</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Jua&family=Gamja+Flower&display=swap');
+
+    body {
+      font-family: 'Jua', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+      background-color: #1e293b;
+    }
+
+    .font-hand {
+      font-family: 'Gamja Flower', cursive;
+    }
+
+    /* 슬레이트/칠판 느낌 배경 */
+    .blackboard {
+      background: #1c3b2b;
+      border: 12px solid #854d0e;
+      box-shadow: inset 0 0 40px rgba(0,0,0,0.8), 0 10px 25px rgba(0,0,0,0.5);
+    }
+
+    .desk {
+      background: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    /* 분필 세레이크 애니메이션 */
+    @keyframes hitPop {
+      0% { transform: scale(0.5) rotate(-10deg); opacity: 0; }
+      50% { transform: scale(1.3) rotate(5deg); opacity: 1; }
+      100% { transform: scale(1) rotate(0deg); opacity: 0; }
+    }
+
+    .hit-effect {
+      animation: hitPop 0.5s ease-out forwards;
+    }
+
+    /* 경고 깜빡임 */
+    @keyframes alertFlash {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 0.8; }
+    }
+
+    .alert-bg {
+      animation: alertFlash 0.6s infinite;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-center items-center p-2 md:p-6 text-white select-none">
+
+  <!-- 메인 게임 컨테이너 -->
+  <div class="relative w-full max-w-4xl h-[95vh] max-h-[850px] flex flex-col justify-between rounded-3xl overflow-hidden blackboard p-4 md:p-6 border-amber-900">
+    
+    <!-- 교장선생님 경고 오버레이 -->
+    <div id="principalAlert" class="hidden absolute inset-0 bg-red-900/40 z-30 pointer-events-none alert-bg flex items-center justify-center">
+      <div class="bg-red-600 text-white font-extrabold text-3xl md:text-5xl px-8 py-4 rounded-2xl border-4 border-yellow-300 shadow-2xl tracking-widest animate-bounce">
+        🚨 교장선생님 순찰 중! (모두 공부!) 🚨
+      </div>
+    </div>
+
+    <!-- 식곤증 이벤트 오버레이 -->
+    <div id="drowsyAlert" class="hidden absolute inset-0 bg-blue-900/30 z-30 pointer-events-none alert-bg flex items-center justify-center">
+      <div class="bg-blue-600 text-white font-extrabold text-3xl md:text-5xl px-8 py-4 rounded-2xl border-4 border-cyan-300 shadow-2xl tracking-widest animate-pulse">
+        💤 집단 식곤증 발생! (잡도리 타임!) 💤
+      </div>
+    </div>
+
+    <!-- 상단 대시보드 (점수, 시간, 하트) -->
+    <header class="flex justify-between items-center bg-black/40 p-3 rounded-2xl border border-emerald-600/50 backdrop-blur-sm z-20">
+      <div class="flex items-center gap-2 md:gap-4">
+        <!-- 인내심 (체력) -->
+        <div class="flex flex-col">
+          <span class="text-xs text-emerald-300 font-bold">선생님의 인내심</span>
+          <div id="heartsContainer" class="flex gap-1 text-red-500 text-lg md:text-2xl">
+            <i class="fa-solid fa-heart"></i>
+            <i class="fa-solid fa-heart"></i>
+            <i class="fa-solid fa-heart"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- 타이머 -->
+      <div class="flex flex-col items-center">
+        <span class="text-xs text-emerald-300 font-bold">남은 수업 시간</span>
+        <div class="text-2xl md:text-4xl font-extrabold text-yellow-300 tracking-wider flex items-center gap-1">
+          <i class="fa-regular fa-clock text-xl"></i>
+          <span id="timer">60</span>s
+        </div>
+      </div>
+
+      <!-- 점수 및 콤보 -->
+      <div class="flex flex-col items-end">
+        <span class="text-xs text-emerald-300 font-bold">잡도리 점수</span>
+        <div class="text-xl md:text-3xl font-extrabold text-green-400" id="score">0</div>
+        <div class="text-xs text-amber-300 font-bold" id="comboText">0 COMBO</div>
+      </div>
+    </header>
+
+    <!-- 중앙 교실 그리드 (3x3 배치) -->
+    <main class="grid grid-cols-3 gap-3 md:gap-6 my-auto z-10 py-2">
+      <!-- 9명의 학생 자리가 JS로 자동 생성됨 -->
+      <div id="classroomGrid" class="contents"></div>
+    </main>
+
+    <!-- 하단 상태 메시지 및 컨트롤 -->
+    <footer class="flex justify-between items-center bg-black/40 px-4 py-2 rounded-xl text-emerald-200 text-sm font-hand z-20">
+      <div id="statusMessage" class="text-base md:text-xl font-bold text-yellow-200">
+        📢 "딴짓하는 학생을 빠르게 클릭해서 칠판 든 손 맛을 보여주세요!"
+      </div>
+      <button id="soundToggle" class="bg-emerald-800 hover:bg-emerald-700 text-white p-2 rounded-lg transition">
+        <i class="fa-solid fa-volume-high" id="soundIcon"></i>
+      </button>
+    </footer>
+
+    <!-- 게임 시작 / 결과 모달 오버레이 -->
+    <div id="modalOverlay" class="absolute inset-0 bg-black/80 z-40 flex items-center justify-center p-4">
+      
+      <!-- 시작 화면 -->
+      <div id="startModal" class="bg-slate-800 border-4 border-amber-600 rounded-3xl p-6 md:p-8 max-w-md w-full text-center shadow-2xl">
+        <h1 class="text-3xl md:text-4xl font-extrabold text-yellow-400 mb-2">수업 안 듣는 학생<br>잡도리하기! 💥</h1>
+        <p class="text-slate-300 font-hand text-lg mb-6">딴짓하는 학생들을 잡아 지식을 채워주세요!</p>
+        
+        <div class="bg-slate-900/80 rounded-xl p-4 text-left text-sm text-slate-200 space-y-2 mb-6 border border-slate-700">
+          <p>🎯 <strong class="text-red-400">자거나 폰 보고 딴짓하는 학생:</strong> 클릭해서 잡도리 (+점수)</p>
+          <p>📖 <strong class="text-green-400">열심히 공부하는 학생:</strong> 절대 건드리지 마세요 (-하트)</p>
+          <p>🚨 <strong class="text-yellow-400">교장선생님 순찰:</strong> 순간 모두 열공! 함정주의!</p>
+          <p>💤 <strong class="text-cyan-400">집단 식곤증:</strong> 대량 딴짓 발생! 찬스타임!</p>
+        </div>
+
+        <button id="startBtn" class="w-full bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-600 hover:to-red-700 text-white font-extrabold text-2xl py-4 rounded-2xl shadow-lg transform active:scale-95 transition">
+          수업 시작하기! 🔔
+        </button>
+      </div>
+
+      <!-- 게임 오버 / 결과 화면 -->
+      <div id="resultModal" class="hidden bg-slate-800 border-4 border-amber-600 rounded-3xl p-6 md:p-8 max-w-md w-full text-center shadow-2xl">
+        <h2 id="resultTitle" class="text-3xl md:text-4xl font-extrabold text-yellow-400 mb-2">수업 종료! 🔔</h2>
+        <div class="my-4">
+          <div class="text-6xl my-2" id="rankBadge">👑</div>
+          <div class="text-xl font-bold text-amber-300 mb-1" id="rankTitle">전설의 참교사</div>
+          <p id="resultDesc" class="text-slate-300 text-sm font-hand">완벽한 수업 태도를 유지시켰습니다!</p>
+        </div>
+
+        <div class="bg-slate-900/80 rounded-2xl p-4 my-4 space-y-2 text-left border border-slate-700">
+          <div class="flex justify-between items-center text-slate-300">
+            <span>최종 점수:</span>
+            <span id="finalScore" class="text-2xl font-bold text-green-400">0점</span>
+          </div>
+          <div class="flex justify-between items-center text-slate-300">
+            <span>성공한 잡도리:</span>
+            <span id="finalHits" class="text-lg text-yellow-300">0회</span>
+          </div>
+          <div class="flex justify-between items-center text-slate-300">
+            <span>억울한 학생 (실수):</span>
+            <span id="finalMisses" class="text-lg text-red-400">0회</span>
+          </div>
+          <div class="flex justify-between items-center text-slate-300">
+            <span>최대 콤보:</span>
+            <span id="finalMaxCombo" class="text-lg text-amber-400">0 COMBO</span>
+          </div>
+        </div>
+
+        <button id="restartBtn" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-2xl py-4 rounded-2xl shadow-lg transform active:scale-95 transition">
+          다시 수업 들어가기 🔄
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // Audio Context (사운드 효과 생성)
+    class SoundEffects {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+
+      init() {
+        if (!this.ctx) {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+      }
+
+      playHit() {
+        if (!this.enabled || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.15);
+        
+        gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+      }
+
+      playWrong() {
+        if (!this.enabled || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(100, this.ctx.currentTime + 0.1);
+        
+        gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+      }
+
+      playBell() {
+        if (!this.enabled || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, this.ctx.currentTime); // A5
+        osc.frequency.setValueAtTime(1760, this.ctx.currentTime + 0.1); 
+        
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.8);
+      }
+
+      playEvent() {
+        if (!this.enabled || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(880, this.ctx.currentTime + 0.1);
+        
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.4);
+      }
+    }
+
+    // 학생 데이터 및 타입 정의
+    const STUDENT_TYPES = {
+      STUDY: {
+        id: 'study',
+        name: '열공 중',
+        avatar: '✍️',
+        bg: 'bg-emerald-900/60',
+        deskItem: '📚',
+        isBad: false,
+        msg: '공부하는데 왜 때려요! 😭',
+        hitText: '억울해!'
+      },
+      SLEEP: {
+        id: 'sleep',
+        name: '꿀잠 자기',
+        avatar: '😴',
+        bg: 'bg-indigo-950/80',
+        deskItem: '💤',
+        isBad: true,
+        msg: '일어나!! 수업시간이다!',
+        hitText: '번쩍!!'
+      },
+      PHONE: {
+        id: 'phone',
+        name: '폰 게임',
+        avatar: '📱',
+        bg: 'bg-purple-950/80',
+        deskItem: '🎮',
+        isBad: true,
+        msg: '스마트폰 집어넣어!',
+        hitText: '폰 압수!'
+      },
+      EAT: {
+        id: 'eat',
+        name: '몰래 빵먹기',
+        avatar: '🍔',
+        bg: 'bg-amber-950/80',
+        deskItem: '🥤',
+        isBad: true,
+        msg: '쉬는 시간에 먹어라!',
+        hitText: '빵 압수!'
+      },
+      TALK: {
+        id: 'talk',
+        name: '수다 떨기',
+        avatar: '🗣️',
+        bg: 'bg-pink-950/80',
+        deskItem: '💬',
+        isBad: true,
+        msg: '거기 뒤에 둘 조용히 안 해?!',
+        hitText: '조용히!'
+      },
+      COMIC: {
+        id: 'comic',
+        name: '만화책 보기',
+        avatar: '📖',
+        bg: 'bg-yellow-950/80',
+        deskItem: '💭',
+        isBad: true,
+        msg: '만화책 압수다!',
+        hitText: '딱 걸렸어!'
+      }
+    };
+
+    const HIT_EFFECT_TEXTS = ["자니?!", "폰 치워!", "압수!!", "집중!", "정신 차려!"];
+
+    // 게임 상태 변수
+    let score = 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let health = 3;
+    let timeLeft = 60;
+    let gameInterval = null;
+    let timerInterval = null;
+    let eventTimeout = null;
+    let isGameRunning = false;
+    let totalHits = 0;
+    let totalMisses = 0;
+
+    // 이벤트 변수
+    let isPrincipalPatrol = false; // 교장선생님 이벤트 (모두 열공)
+    let isDrowsyEvent = false;     // 집단 식곤증 이벤트 (모두 딴짓)
+
+    const sound = new SoundEffects();
+
+    // DOM 요소
+    const classroomGrid = document.getElementById('classroomGrid');
+    const scoreEl = document.getElementById('score');
+    const comboTextEl = document.getElementById('comboText');
+    const timerEl = document.getElementById('timer');
+    const heartsContainer = document.getElementById('heartsContainer');
+    const statusMessage = document.getElementById('statusMessage');
+    
+    const modalOverlay = document.getElementById('modalOverlay');
+    const startModal = document.getElementById('startModal');
+    const resultModal = document.getElementById('resultModal');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+
+    const principalAlert = document.getElementById('principalAlert');
+    const drowsyAlert = document.getElementById('drowsyAlert');
+    const soundToggle = document.getElementById('soundToggle');
+    const soundIcon = document.getElementById('soundIcon');
+
+    // 학생 자리 (9개) 초기화
+    let studentsState = Array(9).fill(null).map((_, i) => ({
+      id: i,
+      type: STUDENT_TYPES.STUDY,
+      changeTime: 0
+    }));
+
+    function createClassroom() {
+      classroomGrid.innerHTML = '';
+      for (let i = 0; i < 9; i++) {
+        const desk = document.createElement('div');
+        desk.className = `relative flex flex-col justify-between items-center p-2 rounded-2xl border-2 border-amber-800/60 shadow-lg cursor-pointer transform active:scale-95 transition-all duration-150 select-none overflow-hidden h-28 sm:h-36 md:h-44`;
+        desk.dataset.id = i;
+
+        desk.innerHTML = `
+          <!-- 학생 캐릭터 영역 -->
+          <div class="student-avatar text-4xl sm:text-5xl md:text-6xl mt-1 transition-transform duration-200">
+            ✍️
+          </div>
+
+          <!-- 아이템 / 생각풍선 -->
+          <div class="desk-item absolute top-2 right-2 text-xl sm:text-2xl animate-bounce">
+          </div>
+
+          <!-- 타격 이펙트 오버레이 -->
+          <div class="hit-overlay absolute inset-0 flex items-center justify-center font-extrabold text-yellow-300 text-lg md:text-2xl opacity-0 pointer-events-none z-20 font-hand">
+          </div>
+
+          <!-- 책상 하단 -->
+          <div class="w-full desk rounded-xl py-1 px-2 text-center text-xs font-bold text-amber-100 border-t border-amber-400/40 shadow-inner flex justify-between items-center">
+            <span class="seat-num text-[10px] text-amber-200/70">#${i + 1}</span>
+            <span class="status-tag text-[10px] md:text-xs bg-black/30 px-1.5 py-0.5 rounded text-emerald-300">공부 중</span>
+          </div>
+        `;
+
+        desk.addEventListener('click', () => handleDeskClick(i));
+        classroomGrid.appendChild(desk);
+      }
+    }
+
+    // 학생 상태 갱신
+    function updateStudentUI(index) {
+      const deskEl = classroomGrid.children[index];
+      const student = studentsState[index];
+      const type = student.type;
+
+      // 배경 변경
+      deskEl.className = `relative flex flex-col justify-between items-center p-2 rounded-2xl border-2 border-amber-800/60 shadow-lg cursor-pointer transform active:scale-95 transition-all duration-150 select-none overflow-hidden h-28 sm:h-36 md:h-44 ${type.bg}`;
+
+      // 이모지 및 아이템
+      const avatarEl = deskEl.querySelector('.student-avatar');
+      const deskItemEl = deskEl.querySelector('.desk-item');
+      const statusTag = deskEl.querySelector('.status-tag');
+
+      avatarEl.textContent = type.avatar;
+      deskItemEl.textContent = type.deskItem;
+
+      if (type.isBad) {
+        statusTag.textContent = type.name;
+        statusTag.className = "status-tag text-[10px] md:text-xs bg-red-900/80 px-1.5 py-0.5 rounded text-red-200 animate-pulse";
+        avatarEl.classList.add('scale-110');
+      } else {
+        statusTag.textContent = "공부 중";
+        statusTag.className = "status-tag text-[10px] md:text-xs bg-emerald-950/80 px-1.5 py-0.5 rounded text-emerald-300";
+        avatarEl.classList.remove('scale-110');
+      }
+    }
+
+    // 게임 스타트
+    function startGame() {
+      sound.init();
+      sound.playBell();
+
+      score = 0;
+      combo = 0;
+      maxCombo = 0;
+      health = 3;
+      timeLeft = 60;
+      totalHits = 0;
+      totalMisses = 0;
+      isGameRunning = true;
+      isPrincipalPatrol = false;
+      isDrowsyEvent = false;
+
+      scoreEl.textContent = score;
+      comboTextEl.textContent = `${combo} COMBO`;
+      timerEl.textContent = timeLeft;
+      statusMessage.textContent = '📢 "수업 시작! 딴짓하는 학생들을 잡아라!"';
+      
+      updateHeartsUI();
+      modalOverlay.classList.add('hidden');
+      startModal.classList.add('hidden');
+      resultModal.classList.add('hidden');
+      principalAlert.classList.add('hidden');
+      drowsyAlert.classList.add('hidden');
+
+      // 초기 학생 상태 모두 공부로
+      studentsState.forEach((s, idx) => {
+        s.type = STUDENT_TYPES.STUDY;
+        updateStudentUI(idx);
+      });
+
+      // 루프 시작
+      clearInterval(gameInterval);
+      clearInterval(timerInterval);
+      clearTimeout(eventTimeout);
+
+      gameInterval = setInterval(gameLoop, 700);
+      timerInterval = setInterval(updateTimer, 1000);
+      scheduleRandomEvent();
+    }
+
+    // 주기적 메인 루프 (학생 행동 상태 변경)
+    function gameLoop() {
+      if (!isGameRunning) return;
+
+      // 교장선생님 순찰 중일 때는 무조건 전원 공부 중!
+      if (isPrincipalPatrol) {
+        studentsState.forEach((s, idx) => {
+          if (s.type !== STUDENT_TYPES.STUDY) {
+            s.type = STUDENT_TYPES.STUDY;
+            updateStudentUI(idx);
+          }
+        });
+        return;
+      }
+
+      // 랜덤하게 학생 몇 명 행동 바꾸기
+      const countToChange = isDrowsyEvent ? Math.floor(Math.random() * 3) + 4 : Math.floor(Math.random() * 2) + 1;
+
+      for (let i = 0; i < countToChange; i++) {
+        const randIndex = Math.floor(Math.random() * 9);
+        
+        if (isDrowsyEvent) {
+          // 식곤증 때는 주로 졸기
+          studentsState[randIndex].type = STUDENT_TYPES.SLEEP;
+        } else {
+          // 일반 상황
+          const badTypes = [
+            STUDENT_TYPES.SLEEP,
+            STUDENT_TYPES.PHONE,
+            STUDENT_TYPES.EAT,
+            STUDENT_TYPES.TALK,
+            STUDENT_TYPES.COMIC
+          ];
+
+          // 65% 확률로 딴짓, 35% 확률로 다시 공부
+          if (Math.random() < 0.65) {
+            const randomBad = badTypes[Math.floor(Math.random() * badTypes.length)];
+            studentsState[randIndex].type = randomBad;
+          } else {
+            studentsState[randIndex].type = STUDENT_TYPES.STUDY;
+          }
+        }
+        updateStudentUI(randIndex);
+      }
+    }
+
+    // 학생 클릭 (잡도리) 처리
+    function handleDeskClick(index) {
+      if (!isGameRunning) return;
+
+      const student = studentsState[index];
+      const deskEl = classroomGrid.children[index];
+      const hitOverlay = deskEl.querySelector('.hit-overlay');
+
+      if (student.type.isBad) {
+        // ✅ 잡도리 성공!!
+        sound.playHit();
+        const pts = 100 + (combo * 20);
+        score += pts;
+        combo++;
+        totalHits++;
+        if (combo > maxCombo) maxCombo = combo;
+
+        scoreEl.textContent = score;
+        comboTextEl.textContent = `${combo} COMBO`;
+        statusMessage.textContent = `💥 ${student.type.msg} (+${pts}점)`;
+
+        // 타격 이펙트
+        const randomText = HIT_EFFECT_TEXTS[Math.floor(Math.random() * HIT_EFFECT_TEXTS.length)];
+        hitOverlay.textContent = randomText;
+        hitOverlay.className = "hit-overlay absolute inset-0 flex items-center justify-center font-extrabold text-yellow-300 text-lg md:text-2xl z-20 font-hand hit-effect";
+
+        setTimeout(() => {
+          hitOverlay.className = "hit-overlay absolute inset-0 flex items-center justify-center font-extrabold text-yellow-300 text-lg md:text-2xl opacity-0 pointer-events-none z-20 font-hand";
+        }, 500);
+
+        // 잡도리 당해서 다시 공부 모드로
+        student.type = STUDENT_TYPES.STUDY;
+        updateStudentUI(index);
+
+      } else {
+        // ❌ 실수!! 열심히 공부하는 학생을 때림
+        sound.playWrong();
+        combo = 0;
+        health--;
+        totalMisses++;
+
+        comboTextEl.textContent = `0 COMBO`;
+        statusMessage.textContent = `😭 ${student.type.msg} (하트 -1)`;
+        updateHeartsUI();
+
+        // 억울 이펙트
+        hitOverlay.textContent = "억울해!💥";
+        hitOverlay.className = "hit-overlay absolute inset-0 flex items-center justify-center font-extrabold text-red-500 text-lg md:text-2xl z-20 font-hand hit-effect";
+
+        setTimeout(() => {
+          hitOverlay.className = "hit-overlay absolute inset-0 flex items-center justify-center font-extrabold text-yellow-300 text-lg md:text-2xl opacity-0 pointer-events-none z-20 font-hand";
+        }, 500);
+
+        if (health <= 0) {
+          endGame(false); // 게임 오버
+        }
+      }
+    }
+
+    // 하트 UI 업데이트
+    function updateHeartsUI() {
+      heartsContainer.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        if (i < health) {
+          heartsContainer.innerHTML += `<i class="fa-solid fa-heart animate-pulse"></i>`;
+        } else {
+          heartsContainer.innerHTML += `<i class="fa-regular fa-heart text-gray-600"></i>`;
+        }
+      }
+    }
+
+    // 돌발 이벤트 (교장선생님 순찰 or 집단 식곤증)
+    function scheduleRandomEvent() {
+      if (!isGameRunning) return;
+
+      const nextEventTime = Math.floor(Math.random() * 8000) + 7000; // 7~15초 후
+
+      eventTimeout = setTimeout(() => {
+        if (!isGameRunning) return;
+
+        const isPrincipal = Math.random() < 0.5;
+        sound.playEvent();
+
+        if (isPrincipal) {
+          // 교장선생님 등장 이벤트 (모두 착해짐)
+          isPrincipalPatrol = true;
+          principalAlert.classList.remove('hidden');
+          statusMessage.textContent = '🚨 교장선생님 순찰 시작! 딴짓하는 학생이 없습니다! 건드리지 마세요!';
+
+          // 전원 공부 상태로 강제 전환
+          studentsState.forEach((s, idx) => {
+            s.type = STUDENT_TYPES.STUDY;
+            updateStudentUI(idx);
+          });
+
+          setTimeout(() => {
+            isPrincipalPatrol = false;
+            principalAlert.classList.add('hidden');
+            if (isGameRunning) statusMessage.textContent = '🚨 교장선생님이 떠나셨습니다. 다시 잡도리 시작!';
+          }, 4500);
+
+        } else {
+          // 집단 식곤증 이벤트 (대량 딴짓 발생)
+          isDrowsyEvent = true;
+          drowsyAlert.classList.remove('hidden');
+          statusMessage.textContent = '💤 식곤증이 몰려옵니다! 딴짓하는 학생들을 몽땅 잡으세요!';
+
+          // 전원 딴짓 상태로
+          studentsState.forEach((s, idx) => {
+            s.type = STUDENT_TYPES.SLEEP;
+            updateStudentUI(idx);
+          });
+
+          setTimeout(() => {
+            isDrowsyEvent = false;
+            drowsyAlert.classList.add('hidden');
+            if (isGameRunning) statusMessage.textContent = '💤 식곤증 타이머가 끝났습니다.';
+          }, 5000);
+        }
+
+        // 다음 이벤트 예약
+        scheduleRandomEvent();
+      }, nextEventTime);
+    }
+
+    // 타이머 관리
+    function updateTimer() {
+      if (!isGameRunning) return;
+      timeLeft--;
+      timerEl.textContent = timeLeft;
+
+      if (timeLeft <= 0) {
+        endGame(true); // 시간 완료로 종료
+      }
+    }
+
+    // 게임 종료 처리
+    function endGame(isTimeUp) {
+      isGameRunning = false;
+      clearInterval(gameInterval);
+      clearInterval(timerInterval);
+      clearTimeout(eventTimeout);
+
+      sound.playBell();
+
+      // 결과 분석 및 랭크
+      let rank = 'F';
+      let title = '사직서 제출... 📄';
+      let badge = '😭';
+      let desc = '교실 통제에 실패했습니다. 학생들이 난장판을 쳤습니다.';
+
+      if (score >= 4500 && health === 3) {
+        rank = 'S';
+        title = '전설의 참교사 👑';
+        badge = '🏆';
+        desc = '완벽한 잡도리와 카리스마! 모든 학생이 1등급 판정을 받았습니다!';
+      } else if (score >= 3000) {
+        rank = 'A';
+        title = '열혈 주임선생님 🔥';
+        badge = '🥇';
+        desc = '탁월한 불시 단속 능력! 교실에 긴장감이 감돏니다.';
+      } else if (score >= 1800) {
+        rank = 'B';
+        title = '평범한 선생님 🏫';
+        badge = '🥈';
+        desc = '적당한 통제력이군요. 종종 딴짓하는 학생이 보입니다.';
+      } else if (score >= 800) {
+        rank = 'C';
+        title = '초보 교사 🐣';
+        badge = '🥉';
+        desc = '학생들에게 이리저리 휘둘렸습니다. 잡도리 연습이 필요합니다!';
+      }
+
+      document.getElementById('resultTitle').textContent = isTimeUp ? '수업 종료! 🔔' : '인내심 고갈! 💥';
+      document.getElementById('rankBadge').textContent = badge;
+      document.getElementById('rankTitle').textContent = `[${rank}랭크] ${title}`;
+      document.getElementById('resultDesc').textContent = desc;
+
+      document.getElementById('finalScore').textContent = `${score}점`;
+      document.getElementById('finalHits').textContent = `${totalHits}회`;
+      document.getElementById('finalMisses').textContent = `${totalMisses}회`;
+      document.getElementById('finalMaxCombo').textContent = `${maxCombo} COMBO`;
+
+      modalOverlay.classList.remove('hidden');
+      startModal.classList.add('hidden');
+      resultModal.classList.remove('hidden');
+    }
+
+    // 사운드 토글
+    soundToggle.addEventListener('click', () => {
+      sound.enabled = !sound.enabled;
+      if (sound.enabled) {
+        soundIcon.className = 'fa-solid fa-volume-high';
+      } else {
+        soundIcon.className = 'fa-solid fa-volume-xmark text-red-400';
+      }
+    });
+
+    // 버튼 이벤트 리스너
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+
+    // 초기화
+    createClassroom();
+  </script>
+</body>
+</html>
